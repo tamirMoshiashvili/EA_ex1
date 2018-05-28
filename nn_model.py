@@ -1,10 +1,12 @@
+from StringIO import StringIO
 from time import time
 import numpy as np
 import mnist
 import pickle
 
-log = open('log.txt', 'w')
-log.write('train-loss,dev-accuracy\n')
+log = StringIO()
+# log = open('log.txt', 'w')
+log.write('train-loss,dev-loss,dev-accuracy\n')
 
 
 def softmax(x):
@@ -94,17 +96,20 @@ class MLP1(object):
 
         return loss, [gW3, gW2, gW1, gb1, gb2, gb3]
 
-    def accuracy_on_dataset(self, dataset):
+    def check_on_dataset(self, dataset):
         """
         :param dataset: list of tuples, each is (x, y) where x is vector and y is its label.
-        :return: accuracy of the model on the given dataset, float between 0 to 1.
+        :return: accuracy and loss of the model on the given dataset, accuracy is float between 0 to 1.
         """
         good = 0.0
+        total_loss = 0.0
         for x, y in dataset:
-            y_prediction = self.predict_on(x)
+            y_hat = self.forward(x)
+            y_prediction = np.argmax(y_hat)
             if y_prediction == y:
                 good += 1
-        return good / len(dataset)
+            total_loss += -np.log(y_hat[y])
+        return good / len(dataset), total_loss / len(dataset)
 
     def get_params(self):
         """
@@ -200,12 +205,13 @@ def train_classifier(train_data, dev_data, model,
 
         # notify progress
         train_loss = total_loss / len(train_data)
-        dev_accuracy = model.accuracy_on_dataset(dev_data)
+        dev_accuracy, dev_loss = model.check_on_dataset(dev_data)
         if dev_accuracy > best_acc:
             best_params = [np.copy(param) for param in model.get_params()]
             best_acc = dev_accuracy
-        print epoch, 'train_loss:', train_loss, 'time:', time() - t_epoch, 'dev_acc:', dev_accuracy
-        log.write('{},{}\n'.format(train_loss, dev_accuracy))
+        print epoch, 'time:', time() - t_epoch, \
+            'train_loss:', train_loss, 'dev_loss:', dev_loss, 'dev_acc:', dev_accuracy
+        log.write('{},{},{}\n'.format(train_loss, dev_loss, dev_accuracy))
 
     print 'best accuracy:', best_acc
     model.set_params(best_params)
@@ -245,7 +251,7 @@ def main():
 
     # load data
     print 'loading data'
-    mndata = mnist.MNIST('../data')
+    mndata = mnist.MNIST('./data')
     train_x, train_y = mndata.load_training()
     train_x = np.array(train_x).astype('float32') / 255
 
@@ -269,15 +275,17 @@ def main():
     print 'start blind test'
     test_x, test_y = mndata.load_testing()
     test_x = np.array(test_x).astype('float32') / 255
-    test_acc = model.accuracy_on_dataset(zip(test_x, test_y))
-    print 'test-acc:', test_acc
+    test_acc, test_loss = model.check_on_dataset(zip(test_x, test_y))
+    print 'test-acc:', test_acc, 'test-loss:', test_loss
 
-    train_acc = model.accuracy_on_dataset(train_data)
-    print 'train-acc:', train_acc
+    train_acc, train_loss = model.check_on_dataset(train_data)
+    print 'train-acc:', train_acc, 'train-loss:', train_loss
 
-    pickle.dump(model.get_params(), open('model_{}_{}.params'.format(int(train_acc*100), int(test_acc*100)), 'w'))
-    log.write('\ntrain-accuracy: {}\ntest-accuracy: {}'.format(train_acc, test_acc))
-    log.close()
+    pickle.dump(model.get_params(), open('model_{}_{}.params'.format(int(train_acc * 100), int(test_acc * 100)), 'w'))
+    log.write('\ntrain: accuracy: {} | loss: {}\ntest: accuracy: {} | loss: {}'.format(
+        train_acc, train_loss, test_acc, test_loss))
+    with open('log_{}_{}.txt', 'w') as f:
+        f.write(log.getvalue())
 
     print 'time to train:', time() - start
 
