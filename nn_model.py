@@ -1,132 +1,11 @@
 from StringIO import StringIO
 from time import time
-import numpy as np
 import mnist
 import pickle
+from utils import MLP2, np
 
 log = StringIO()
-# log = open('log.txt', 'w')
 log.write('train-loss,dev-loss,dev-accuracy\n')
-
-
-def softmax(x):
-    """
-    Compute the softmax vector.
-    x: a n-dim vector (numpy array)
-    returns: an n-dim vector (numpy array) of softmax values
-    """
-    x -= np.max(x)  # For numeric stability
-    x = np.exp(x)
-    x /= np.sum(x)
-
-    return x
-
-
-def sigmoid(x):
-    """
-    Compute the sigmoid vector.
-    x: a n-dim vector (numpy array)
-    returns: an n-dim vector (numpy array) of sigmoid values.
-    """
-    return np.array([1 / (1 + np.exp(-i)) for i in x])
-
-
-class MLP1(object):
-    def __init__(self, in_dim, hid_dim1, hid_dim2, out_dim):
-        # Xavier Glorot init
-        Glorot_init = lambda n, m: np.random.uniform(-np.sqrt(6.0 / (n + m)), np.sqrt(6.0 / (n + m)),
-                                                     (n, m) if (n != 1 and m != 1) else n * m)
-
-        self.W3 = Glorot_init(hid_dim2, out_dim)
-        self.W2 = Glorot_init(hid_dim1, hid_dim2)
-        self.W1 = Glorot_init(in_dim, hid_dim1)
-        self.b1 = Glorot_init(1, hid_dim1)
-        self.b2 = Glorot_init(1, hid_dim2)
-        self.b3 = Glorot_init(1, out_dim)
-
-    def forward(self, x):
-        """
-        :param x: numpy array of size in_dim.
-        :return: numpy array of size out_dim.
-        """
-        sig1 = sigmoid(np.dot(x, self.W1) + self.b1)
-        sig2 = sigmoid(np.dot(sig1, self.W2) + self.b2)
-        return softmax(np.dot(sig2, self.W3) + self.b3)
-
-    def predict_on(self, x):
-        """
-        :param x: numpy array of size in_dim.
-        :return: scalar to indicate the predicted label of x.
-        """
-        return np.argmax(self.forward(x))
-
-    def loss_and_gradients(self, x, y):  # TODO
-        """
-        :param x: numpy array of size in_dim.
-        :param y: scalar, label of x.
-        :return: loss (float) and gradients (list of size 4).
-        """
-        sig1 = sigmoid(np.dot(x, self.W1) + self.b1)
-        sig2 = sigmoid(np.dot(sig1, self.W2) + self.b2)
-        y_hat = softmax(np.dot(sig2, self.W3) + self.b3)
-        loss = -np.log(y_hat[y])  # NLL loss
-
-        # gradient of b3
-        gb3 = np.copy(y_hat)
-        gb3[y] -= 1
-
-        # gradient of W3
-        gW3 = np.outer(sig2, y_hat)
-        gW3[:, y] -= sig2
-
-        # gradient of b2 - use the chain rule
-        dloss_dsigmoid2 = -self.W3[:, y] + np.dot(self.W3, y_hat)
-        dsigmoid2_db2 = sig2 * (1 - sig2)
-        gb2 = dloss_dsigmoid2 * dsigmoid2_db2
-
-        # gradient of W2 - use the chain rule
-        gW2 = np.outer(sig1, gb2)
-
-        # gradient of b1 - use the chain rule
-        dsig1_db1 = sig1 * (1 - sig1)
-        gb1 = np.dot(self.W2, gb2) * dsig1_db1
-
-        # gradient of W1
-        gW1 = np.outer(x, gb1)
-
-        return loss, [gW3, gW2, gW1, gb1, gb2, gb3]
-
-    def check_on_dataset(self, dataset):
-        """
-        :param dataset: list of tuples, each is (x, y) where x is vector and y is its label.
-        :return: accuracy and loss of the model on the given dataset, accuracy is float between 0 to 1.
-        """
-        good = 0.0
-        total_loss = 0.0
-        for x, y in dataset:
-            y_hat = self.forward(x)
-            y_prediction = np.argmax(y_hat)
-            if y_prediction == y:
-                good += 1
-            total_loss += -np.log(y_hat[y])
-        return good / len(dataset), total_loss / len(dataset)
-
-    def get_params(self):
-        """
-        :return: list of model parameters.
-        """
-        return [self.W3, self.W2, self.W1, self.b1, self.b2, self.b3]
-
-    def set_params(self, params):
-        """
-        :param params: list of size 4.
-        """
-        self.W3 = params[0]
-        self.W2 = params[1]
-        self.W1 = params[2]
-        self.b1 = params[3]
-        self.b2 = params[4]
-        self.b3 = params[5]
 
 
 def train_classifier(train_data, dev_data, model,
@@ -232,18 +111,19 @@ def train_dev_split(train_x, train_y, size=0.2):
     return train_data, dev_data
 
 
-def predict_test(test_x, model):
-    """
-    create a file which contains the prediction of the model on a blind test.
-    :param test_x: numpy array of vectors.
-    :param model: NN model.
-    """
-    with open('test.pred', 'w') as f:
-        def predict_as_str(x):
-            return str(model.predict_on(x))
-
-        preds = map(predict_as_str, test_x)
-        f.write('\n'.join(preds))
+# TODO delete at the end
+# def predict_test(test_x, model):
+#     """
+#     create a file which contains the prediction of the model on a blind test.
+#     :param test_x: numpy array of vectors.
+#     :param model: NN model.
+#     """
+#     with open('test.pred', 'w') as f:
+#         def predict_as_str(x):
+#             return str(model.predict_on(x))
+#
+#         preds = map(predict_as_str, test_x)
+#         f.write('\n'.join(preds))
 
 
 def main():
@@ -266,7 +146,7 @@ def main():
 
     # create and train classifier
     print 'start training'
-    model = MLP1(in_dim, hid_dim1, hid_dim2, out_dim)
+    model = MLP2(in_dim, hid_dim1, hid_dim2, out_dim)
     train_data, dev_data = train_dev_split(train_x, train_y, size=0.2)
     print 'all:', len(train_x), ', train:', len(train_data), 'dev:', len(dev_data)
     train_classifier(train_data, dev_data, model)
