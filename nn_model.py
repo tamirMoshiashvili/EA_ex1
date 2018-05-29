@@ -164,7 +164,7 @@ def main():
     pickle.dump(model.get_params(), open('model_{}_{}.params'.format(int(train_acc * 100), int(test_acc * 100)), 'w'))
     log.write('\ntrain: accuracy: {} | loss: {}\ntest: accuracy: {} | loss: {}'.format(
         train_acc, train_loss, test_acc, test_loss))
-    with open('log_{}_{}.txt', 'w') as f:
+    with open('log_{}_{}.txt'.format(int(train_acc * 100), int(test_acc * 100)), 'w') as f:
         f.write(log.getvalue())
 
     print 'time to train:', time() - start

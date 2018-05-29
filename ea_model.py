@@ -5,7 +5,7 @@ import pickle
 
 
 class EA(object):
-    def __init__(self, in_dim, hid_dim1, hid_dim2, out_dim):
+    def __init__(self, in_dim, hid_dim1, hid_dim2, out_dim, num_elitism=2):
         # save net dims
         self.in_dim = in_dim
         self.hid_dim1 = hid_dim1
@@ -13,55 +13,34 @@ class EA(object):
         self.out_dim = out_dim
 
         self.population = []
-        self.elitism = [None, None]
-        self.elitism_scores = [-1, -1]
+        self.num_population = 0
+        self.num_elitism = num_elitism
+        self.elitism = [(-1, None)] * num_elitism
+        self.fitness_roulette = []
 
-    def init_population(self, size=100):
+    def init_population(self, size):
         self.population = [MLP2(self.in_dim, self.hid_dim1, self.hid_dim2, self.out_dim) for _ in range(size)]
+        for i in range(size - self.num_elitism):
+            self.fitness_roulette.extend([i] * (i + 1))
+        self.num_population = size
 
     def calc_fitness(self, dataset_sample):
         # calc accuracy of each mlp2 on the given dataset-sample
-        scores = []
-        for mlp in self.population:
-            acc, loss = mlp.check_on_dataset(dataset_sample)
-            while acc in scores:
-                acc += 0.0001
-            scores.append(acc)
-        sorted_scores = sorted(scores)
+        scores = [(mlp.check_on_dataset(dataset_sample)[0], mlp) for mlp in self.population]
+        scores.sort(key=lambda a: a[0])
+        self.population = [x[1] for x in scores]
+        for _ in range(self.num_elitism):   # remove the bad chromosomes
+            self.population.pop(0)
 
-        print 'best:', sorted_scores[-1], 'worst:', sorted_scores[0]  # TODO
+        self.elitism = scores[-self.num_elitism:]
+        self.elitism.reverse()
+        np.random.shuffle(self.fitness_roulette)  # shuffle roulette
 
-        # save elitism
-        elit_id1 = scores.index(sorted_scores[-1])
-        elit_id2 = scores.index(sorted_scores[-2])
-        if scores[elit_id1] > self.elitism_scores[0]:
-            self.elitism[0] = self.population[elit_id1]
-            self.elitism_scores[0] = scores[elit_id1]
-            if scores[elit_id2] > self.elitism_scores[1]:
-                self.elitism[1] = self.population[elit_id1]
-                self.elitism_scores[1] = scores[elit_id2]
-        elif scores[elit_id1] > self.elitism_scores[1]:
-            self.elitism[1] = self.population[elit_id1]
-            self.elitism_scores[1] = scores[elit_id1]
-
-        # create fitness vector
-        fit_vec = []
-        for acc in scores:
-            fit_vec.append(sorted_scores.index(acc))
-        return fit_vec
-
-    @staticmethod
-    def create_fitness_roulette(fitness_vec):
-        roulette = []
-        for i in fitness_vec:
-            roulette.extend([i] * (i + 1))
-        return roulette
-
-    def select_parents(self, fitness_roulette):
-        id1 = np.random.choice(fitness_roulette)
-        id2 = id1
+    def select_parents(self):
+        id1 = np.random.choice(self.fitness_roulette)
+        id2 = np.random.choice(self.fitness_roulette)
         while id1 == id2:
-            id2 = np.random.choice(fitness_roulette)
+            id2 = np.random.choice(self.fitness_roulette)
         return self.population[id1], self.population[id2]
 
     def crossover(self, p1, p2):
@@ -88,32 +67,34 @@ class EA(object):
 
         return MLP2(params=child_params1), MLP2(params=child_params2)
 
-    def mutate(self, child, p=0.03):
+    def mutate(self, child, p=0.05):
         if np.random.random() < p:
             # add gaussian noise to each parameter
             params = child.get_params()
+            # i = np.random.choice(range(len(params)))
+            # params[i] += np.random.normal(scale=0.001, size=params[i].shape)
             for i in range(len(params)):
-                params[i] += np.random.normal(size=params[i].shape)
+                params[i] += np.random.normal(scale=0.001, size=params[i].shape)
             # update object params
             child.set_params(params)
 
-    def run(self, dataset, population_size=100, sample_size=20, num_generations=20):
-        # init step
-        self.init_population(size=population_size)
-
+    def run(self, dataset, population_size=20, sample_size=200, num_generations=1000):
+        self.init_population(size=population_size)  # init step
         data_idx = range(len(dataset))
+
         for generation in range(num_generations):
             t_start = time()
+
             # sample dataset and evaluate chromosomes
             dataset_sample = [dataset[i] for i in np.random.choice(data_idx, sample_size)]
-            fitness_vec = self.calc_fitness(dataset_sample)
-            fitness_roulette = EA.create_fitness_roulette(fitness_vec)
+            self.calc_fitness(dataset_sample)
 
-            curr_population = list(self.elitism)  # initiate new population, starting with elitism
+            # initiate new population, starting with elitism
+            curr_population = [mlp for _, mlp in self.elitism]
 
             # create new population
-            while len(curr_population) != len(self.population):
-                p1, p2 = self.select_parents(fitness_roulette)
+            while len(curr_population) != self.num_population:
+                p1, p2 = self.select_parents()
                 child1, child2 = self.crossover(p1, p2)
                 self.mutate(child1)
                 self.mutate(child2)
@@ -122,10 +103,11 @@ class EA(object):
 
             # update population
             self.population = curr_population
-            print 'time for generation', generation, ':', time() - t_start
+            print generation, 'time:', time() - t_start,\
+                'best1:', self.elitism[0][0], 'best2:', self.elitism[1][0]  # TODO
 
     def get_best(self):
-        return self.elitism[0]
+        return self.elitism[0][1]
 
 
 def main():
