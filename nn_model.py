@@ -161,10 +161,10 @@ def main():
     train_acc, train_loss = model.check_on_dataset(train_data)
     print 'train-acc:', train_acc, 'train-loss:', train_loss
 
-    pickle.dump(model.get_params(), open('model_{}_{}.params'.format(int(train_acc * 100), int(test_acc * 100)), 'w'))
+    pickle.dump(model.get_params(), open('nn_params/model_{}_{}.params'.format(int(train_acc * 100), int(test_acc * 100)), 'w'))
     log.write('\ntrain: accuracy: {} | loss: {}\ntest: accuracy: {} | loss: {}'.format(
         train_acc, train_loss, test_acc, test_loss))
-    with open('log_{}_{}.txt'.format(int(train_acc * 100), int(test_acc * 100)), 'w') as f:
+    with open('nn_params/log_{}_{}.txt'.format(int(train_acc * 100), int(test_acc * 100)), 'w') as f:
         f.write(log.getvalue())
 
     print 'time to train:', time() - start

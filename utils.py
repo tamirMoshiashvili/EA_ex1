@@ -14,15 +14,6 @@ def softmax(x):
     return x
 
 
-def sigmoid(x):
-    """
-    Compute the sigmoid vector.
-    x: a n-dim vector (numpy array)
-    returns: an n-dim vector (numpy array) of sigmoid values.
-    """
-    return np.array([1 / (1 + np.exp(-i)) for i in x])
-
-
 def Glorot_init(n, m):
     """
     Xavier Glorot init
@@ -56,8 +47,6 @@ class MLP2(object):
         :param x: numpy array of size in_dim.
         :return: numpy array of size out_dim.
         """
-        # sig1 = sigmoid(np.dot(x, self.W1) + self.b1)
-        # sig2 = sigmoid(np.dot(sig1, self.W2) + self.b2)
         tan1 = np.tanh(np.dot(x, self.W1) + self.b1)
         tan2 = np.tanh(np.dot(tan1, self.W2) + self.b2)
         return softmax(np.dot(tan2, self.W3) + self.b3)
@@ -73,10 +62,8 @@ class MLP2(object):
         """
         :param x: numpy array of size in_dim.
         :param y: scalar, label of x.
-        :return: loss (float) and gradients (list of size 4).
+        :return: loss (float) and gradients (list of size 6).
         """
-        # sig1 = sigmoid(np.dot(x, self.W1) + self.b1)
-        # sig2 = sigmoid(np.dot(sig1, self.W2) + self.b2)
         tan1 = np.tanh(np.dot(x, self.W1) + self.b1)
         tan2 = np.tanh(np.dot(tan1, self.W2) + self.b2)
         y_hat = softmax(np.dot(tan2, self.W3) + self.b3)
@@ -87,25 +74,18 @@ class MLP2(object):
         gb3[y] -= 1
 
         # gradient of W3
-        # gW3 = np.outer(sig2, y_hat)
         gW3 = np.outer(tan2, y_hat)
         gW3[:, y] -= tan2
 
         # gradient of b2 - use the chain rule
-        # dloss_dsigmoid2 = -self.W3[:, y] + np.dot(self.W3, y_hat)
-        # dsigmoid2_db2 = sig2 * (1 - sig2)
         dloss_tan2 = -self.W3[:, y] + np.dot(self.W3, y_hat)
         dtan2_db2 = 1-tan2**2
-        # gb2 = dloss_dsigmoid2 * dsigmoid2_db2
         gb2 = dloss_tan2 * dtan2_db2
 
         # gradient of W2 - use the chain rule
-        # gW2 = np.outer(sig1, gb2)
         gW2 = np.outer(tan1, gb2)
 
         # gradient of b1 - use the chain rule
-        # dsig1_db1 = sig1 * (1 - sig1)
-        # gb1 = np.dot(self.W2, gb2) * dsig1_db1
         dtan1_db1 = 1-tan1**2
         gb1 = np.dot(self.W2, gb2) * dtan1_db1
 
