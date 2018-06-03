@@ -17,10 +17,11 @@ class EAModel(object):
 
         self.num_elitism = num_elitism
         self.elitism = []
-        self.best = (np.inf, None)
+        self.best = (np.inf, None, -1)
 
         self.fitness_roulette = []
         self.avg_loss = -1
+        self.avg_accuracy = -1
         self.mutate_rate = -1
 
     def init_population(self, pop_size):
@@ -32,9 +33,13 @@ class EAModel(object):
 
     def calc_fitness(self, dataset_sample):
         # calc scores according to loss
-        scores = [(mlp.check_on_dataset(dataset_sample)[1], mlp) for mlp in self.population]
+        scores = []
+        for mlp in self.population:
+            acc, loss = mlp.check_on_dataset(dataset_sample)
+            scores.append((loss, mlp, acc))
         scores.sort(key=lambda a: a[0], reverse=True)
         self.avg_loss = sum([x[0] for x in scores]) / len(scores)
+        self.avg_accuracy = sum([x[2] for x in scores]) / len(scores)
 
         for _ in range(self.num_elitism):  # remove the bad chromosomes
             scores.pop(0)
@@ -101,9 +106,9 @@ class EAModel(object):
             np.random.shuffle(self.fitness_roulette)  # shuffle roulette
 
             # new population - add elitism
-            curr_pop = [mlp for _, mlp in self.elitism]
-            # breed with best one chromosome
-            p2 = self.population[0]  # take the current worst chromosome
+            curr_pop = [x[1] for x in self.elitism]
+            # breed one with best chromosome
+            p2 = np.random.choice(self.population)
             child = self.crossover(self.best[1], p2)
             self.mutate(child)
             curr_pop.append(child)
@@ -116,15 +121,19 @@ class EAModel(object):
 
             # update population
             self.population = curr_pop
-            print '{} time: {:.2f} all-best: {:.5f} gen-best: {:.5f} avg: {:.5f}'.format(
-                generation, time() - t_start, self.best[0], self.elitism[0][0], self.avg_loss
+            print '{} time: {:.2f} |' \
+                  ' best: loss: {:.5f} acc: {:.3f} |' \
+                  ' loss: gen-best {:.5f} avg: {:.5f} |' \
+                  ' acc: gen-best: {:.3f} avg: {:.3f}'.format(
+                generation, time() - t_start, self.best[0], self.best[2],
+                self.elitism[0][0], self.avg_loss, self.elitism[0][2], self.avg_accuracy
             )
 
     def get_best(self, dataset, sample_size):
         data_idx = range(len(dataset))
         np.random.shuffle(data_idx)
         dataset_sample = [dataset[i] for i in np.random.choice(data_idx, sample_size)]
-        ops = [mlp for _, mlp in self.elitism]
+        ops = [x[1] for x in self.elitism]
         ls = [(mlp.check_on_dataset(dataset_sample)[0], mlp) for mlp in ops]
         ls.sort(key=lambda a: a[0])
         return ls[-1][1]
@@ -145,7 +154,7 @@ def main():
     out_dim = 10
 
     ea_model = EAModel(in_dim, hid_dim1, hid_dim2, out_dim, num_elitism=5)
-    ea_model.run(train_data, population_size=50, sample_size=100, num_generations=10000, mutate_p=0.4)
+    ea_model.run(train_data, population_size=50, sample_size=150, num_generations=10000, mutate_p=0.05)
     model = ea_model.get_best(train_data, sample_size=12000)
 
     # blind test

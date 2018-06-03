@@ -41,5 +41,5 @@ def main(a, b):
 
 if __name__ == '__main__':
     t0 = time()
-    main(82, 83)
+    main(90, 90)
     print 'time to run:', time() - t0
