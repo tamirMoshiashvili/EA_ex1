@@ -111,21 +111,6 @@ def train_dev_split(train_x, train_y, size=0.2):
     return train_data, dev_data
 
 
-# TODO delete at the end
-# def predict_test(test_x, model):
-#     """
-#     create a file which contains the prediction of the model on a blind test.
-#     :param test_x: numpy array of vectors.
-#     :param model: NN model.
-#     """
-#     with open('test.pred', 'w') as f:
-#         def predict_as_str(x):
-#             return str(model.predict_on(x))
-#
-#         preds = map(predict_as_str, test_x)
-#         f.write('\n'.join(preds))
-
-
 def main():
     start = time()
 
