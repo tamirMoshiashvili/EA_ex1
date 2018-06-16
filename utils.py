@@ -51,6 +51,25 @@ class MLP2(object):
         tan2 = np.tanh(np.dot(tan1, self.W2) + self.b2)
         return softmax(np.dot(tan2, self.W3) + self.b3)
 
+    def forward_batch(self, batch_x):
+        """
+        :param batch_x: numpy array of shape (n, in_dim) where n is batch size and in_dim is input dimension.
+        :return: numpy array of shape (n, out_dim).
+        """
+        tan1 = np.tanh(np.dot(batch_x, self.W1) + self.b1)
+        tan2 = np.tanh(np.dot(tan1, self.W2) + self.b2)
+        batch_out = np.dot(tan2, self.W3) + self.b3
+        return np.array([softmax(x) for x in batch_out])
+
+    def check_on_dataset_batch(self, dataset):
+        xs, y_golds = zip(*dataset)
+        xs = np.array(xs)
+        batch_out = self.forward_batch(xs)
+        y_preds = np.array([np.argmax(x) for x in batch_out])
+        good = float((y_preds == y_golds).sum())
+        total_loss = np.array([-np.log(y_hat[y]) for y_hat, y in zip(batch_out, y_golds)]).sum()
+        return good / len(y_golds), total_loss / len(y_golds)
+
     def predict_on(self, x):
         """
         :param x: numpy array of size in_dim.
@@ -79,14 +98,14 @@ class MLP2(object):
 
         # gradient of b2 - use the chain rule
         dloss_tan2 = -self.W3[:, y] + np.dot(self.W3, y_hat)
-        dtan2_db2 = 1-tan2**2
+        dtan2_db2 = 1 - tan2 ** 2
         gb2 = dloss_tan2 * dtan2_db2
 
         # gradient of W2 - use the chain rule
         gW2 = np.outer(tan1, gb2)
 
         # gradient of b1 - use the chain rule
-        dtan1_db1 = 1-tan1**2
+        dtan1_db1 = 1 - tan1 ** 2
         gb1 = np.dot(self.W2, gb2) * dtan1_db1
 
         # gradient of W1

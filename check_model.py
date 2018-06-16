@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 
 def main(a, b):
     print 'load model'
-    model_path = 'ea_params/model_{}_{}.params'.format(a, b)
+    # model_path = 'ea_params/model_{}_{}.params'.format(a, b)
+    model_path = 'ea_params/model_best.params'
     params = pickle.load(open(model_path))
     mlp = MLP2(params=params)
 

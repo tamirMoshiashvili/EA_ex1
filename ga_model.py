@@ -1,3 +1,4 @@
+import sys
 from time import time
 import numpy as np
 import pickle
@@ -56,7 +57,8 @@ class EAModel(object):
         # calc scores according to some evaluation metric
         scores = []
         for mlp in self.population:
-            acc, loss = mlp.check_on_dataset(dataset_sample)
+            # acc, loss = mlp.check_on_dataset(dataset_sample)
+            acc, loss = mlp.check_on_dataset_batch(dataset_sample)
             scores.append((loss, mlp, acc))
         scores.sort(key=lambda a: a[self.key_index], reverse=self.reverse)
         self.avg_loss = sum([x[0] for x in scores]) / len(scores)
@@ -68,6 +70,7 @@ class EAModel(object):
         # if needed, update best model
         if self.cmp(self.best[self.key_index], scores[-1][self.key_index]):
             self.best = scores[-1]
+            # pickle.dump(self.best[1].get_params(), open('ea_params/model_best.params', 'w'))
 
         # elitism
         self.elitism = scores[-self.num_elitism:]
@@ -119,9 +122,9 @@ class EAModel(object):
             val = np.random.random()
             for i in range(len(params)):  # add gaussian noise to each parameter
                 if val < 0.3:
-                    params[i] += np.random.normal(scale=0.0001, size=params[i].shape)
+                    params[i] += np.random.normal(scale=0.0003, size=params[i].shape)
                 elif val < 0.6:
-                    params[i] += np.random.normal(scale=0.001, size=params[i].shape)
+                    params[i] += np.random.normal(scale=0.005, size=params[i].shape)
                 else:
                     params[i] += np.random.normal(scale=0.01, size=params[i].shape)
             child.set_params(params)  # update object params
@@ -214,10 +217,77 @@ class EAModel(object):
         return ls[-1][1]
 
 
-def main(pretrained=None):
+def load_dataset(filename, has_labels=True):
+    """
+    each line in dataset file is in the format: x1 x2 ... xn (separated by space).
+    each xi of the input vector is int from 0 to 255.
+    if has labels, then the last value in each line is the label (int).
+    :param filename: (string) path to the dataset file.
+    :param has_labels: (boolean) does the file has labels or not.
+    :return: list of object - tuple (has labels) or numpy array (no labels).
+    """
+    dataset = []
+
+    with open(filename) as f:
+        for line in f:
+            line = line.split()
+            if has_labels:
+                label = int(line.pop(-1))
+            line = np.array(map(float, line)) / 255  # normalized
+            if has_labels:
+                line = (line, label)
+            dataset.append(line)
+
+    return np.array(dataset)
+
+
+def test_model(model, dataset_file, output_file):
+    """
+    craete a prediction file, in each line there is a label.
+    :param model: (MLP2) model object.
+    :param dataset_file: (string) path to dataset file.
+    :param output_file: (string) path to the file tthat will be created.
+    """
+    dataset = load_dataset(dataset_file, has_labels=False)
+    preds = []
+    for x in dataset:
+        preds.append(model.predict_on(x))
+
+    with open(output_file, 'w') as f:
+        f.write('\n'.join(preds))
+
+
+def eval_model(model, dataset_file):
+    """
+    check accuracy on dataset and notify the user.
+    :param model: (MLP2) model object.
+    :param dataset_file: (string) path to dataset file.
+    """
+    dataset = load_dataset(dataset_file, has_labels=True)
+    good = 0.0
+    for x, gold in dataset:
+        pred = model.predict_on(x)
+        if pred == gold:
+            good += 1
+
+    print 'accuracy:', good / len(dataset)
+
+
+def train_on(config_file):
+    """
+    :param config_file: (string) path to configuration file.
+    :return: (MLP2) model.
+    """
+    # load configurations
+    configs = dict()
+    with open(config_file) as f:
+        for line in f:
+            [key, val] = line.split()
+            configs[key] = val
+
     # load data
     print 'loading data'
-    mndata = mnist.MNIST('./data')
+    mndata = mnist.MNIST(configs[MNIST_PATH])
     train_x, train_y = mndata.load_training()
     train_x = np.array(train_x).astype('float32') / 255
     train_data = zip(train_x, train_y)
@@ -228,20 +298,22 @@ def main(pretrained=None):
     hid_dim2 = 64
     out_dim = 10
 
-    # check if to load pre-trained MLP2
+    # check if to load pre-trained MLP2,
+    # set pretrained to be a path to '.params' file if needed to load a pre-trained MLP2.
     best = None
-    if pretrained:
+    if PRETRAINED in configs:
         print 'load and eval pretrained on train-data'
-        params = pickle.load(open(pretrained))
+        params = pickle.load(open(configs[PRETRAINED]))
         best_mlp = MLP2(params=params)
         acc, loss = best_mlp.check_on_dataset(train_data)
         best = (loss, best_mlp, acc)
 
     # run GA
-    ea_model = EAModel(in_dim, hid_dim1, hid_dim2, out_dim, num_elitism=5)
-    ea_model.init_population(pop_size=50)  # init step
-    ea_model.run(train_data, sample_size=100, num_generations=10000, mutate_p=0.05, mode='loss', best=best)
-    model = ea_model.get_best(train_data, sample_size=12000)
+    ea_model = EAModel(in_dim, hid_dim1, hid_dim2, out_dim, num_elitism=int(configs[NUM_ELITISM]))
+    ea_model.init_population(pop_size=int(configs[POP_SIZE]))  # init step
+    ea_model.run(train_data, sample_size=int(configs[SAMPLE_SIZE]), num_generations=int(configs[NUM_GENS]),
+                 mutate_p=float(configs[MUTATE_RATE]), mode=configs[METRIC], best=best)
+    model = ea_model.get_best(train_data, sample_size=int(configs[DEV_SIZE]))
 
     # test
     print 'start test'
@@ -254,18 +326,65 @@ def main(pretrained=None):
     print 'train-acc:', train_acc, 'train-loss:', train_loss
     log.write('\ntrain - accuracy: {:.5f} | loss: {:.5f}'.format(train_acc, train_loss))
     log.write('\ntest - accuracy: {:.5f} | loss: {:.5f}'.format(test_acc, test_loss))
-    pickle.dump(model.get_params(),
-                open('ea_params/model_{}_{}.params'.format(int(train_acc * 100), int(test_acc * 100)), 'w'))
 
     print 'best acc:', ea_model.best[0]
+    return model
+
+
+TRAIN = '-train'
+SAVE = '-save'
+LOAD = '-load'
+EVAL = '-eval'
+TEST = '-test'
+
+PRETRAINED = 'pretrained'
+POP_SIZE = 'population_size'
+NUM_ELITISM = 'num_elitism'
+SAMPLE_SIZE = 'sample_size'
+NUM_GENS = 'num_generations'
+MUTATE_RATE = 'mutate_rate'
+METRIC = 'metric'
+DEV_SIZE = 'dev_size'
+MNIST_PATH = 'mnist_path'
+
+
+def main():
+    """
+    Args - can combine multiple:
+        [-train configuration_file]
+        [-save model_filename]
+        [-load params_file]
+        [-eval dataset_file]
+        [-test dataset_file output_filename]
+    """
+    args = sys.argv[1:]
+
+    if TRAIN in args:
+        config_file = args[args.index(TRAIN) + 1]
+        model = train_on(config_file)
+
+        if SAVE in args:
+            target_file = args[args.index(SAVE) + 1]
+            pickle.dump(model.get_params(), open(target_file, 'w'))
+
+    if LOAD in args:
+        params_file = args[args.index(LOAD) + 1]
+        params = pickle.load(open(params_file))
+        model = MLP2(params=params)
+
+    if EVAL in args:
+        dataset_file = args[args.index(EVAL) + 1]
+        eval_model(model, dataset_file)
+
+    if TEST in args:
+        i = args.index(TEST)
+        dataset_file = args[i + 1]
+        output_filename = args[i + 2]
+        test_model(model, dataset_file, output_filename)
 
 
 if __name__ == '__main__':
     t0 = time()
-
-    # set pretrained to be a path to '.params' file if needed to load a pre-trained MLP2.
-    # pretrained = 'ea_params/model.params'
-    pretrained = None
-    main(pretrained)
+    main()
     print 'time to run:', time() - t0
     log.close()

@@ -3,6 +3,7 @@ from time import time
 import mnist
 import pickle
 from utils import MLP2, np
+import sys
 
 log = StringIO()
 log.write('train-loss,dev-loss,dev-accuracy\n')
@@ -116,7 +117,7 @@ def main():
 
     # load data
     print 'loading data'
-    mndata = mnist.MNIST('./data')
+    mndata = mnist.MNIST(sys.argv[1])
     train_x, train_y = mndata.load_training()
     train_x = np.array(train_x).astype('float32') / 255
 
